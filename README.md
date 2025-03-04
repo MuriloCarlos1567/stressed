@@ -28,6 +28,11 @@ Stressed is a high-performance load testing tool written in Go. It leverages the
 - **Modern Frontend**  
   The web interface provides an intuitive and responsive design with consistent styling across forms, modals, and result displays.
 
+## Performance
+![Stressed Banner](https://i.ibb.co/23pCwSpL/result.png)
+
+Stressed can handle **over 200k requests per second** under heavy load.
+
 ## Getting Started
 
 ### Prerequisites
