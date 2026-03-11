@@ -1,48 +1,45 @@
 # Stressed
 
-Stressed is a high-performance load testing tool written in Go. It leverages the [fasthttp](https://github.com/valyala/fasthttp) library to achieve superior concurrency and minimal overhead. The tool provides a web-based frontend to configure tests, view real-time results, validate API responses, and manage test history.
+Stressed is a load testing tool written in Go with a web UI for configuring runs, validating requests, and managing history.
 
-## Main Features
+## Features
 
-- **Load Testing Engine**  
-  Run performance tests with configurable concurrency and duration. It measures key metrics like success rate, average latency, 95th percentile latency, total requests, and requests per second.
+- Load testing with configurable method, headers, body, concurrency, and duration
+- Real load shaping with `spawnRate`, `rampUpSeconds`, `rampDownSeconds`, and custom `stages`
+- Scenario execution with multiple tasks and modes:
+  - `sequential` for user journeys (for example: login -> search -> buy)
+  - `weighted` for probabilistic task mix
+- Think time controls per virtual user:
+  - `fixed`
+  - `random` (min/max)
+  - `distribution` (`uniform`, `normal`, `exponential`)
+- Thresholds/SLO pass-fail:
+  - `maxP95LatencyMs`
+  - `maxErrorRate`
+  - `minRps`
+  - CI exit code support in CLI mode
+- Detailed metrics:
+  - Global: success rate, error rate, avg latency, p50/p90/p95/p99, total requests, RPS
+  - By endpoint: total, success rate, avg latency, p50/p90/p95/p99
+  - By status code: count and rate
+  - Errors grouped by type (`timeout`, `network_error`, `unexpected_status`, `missing_variable`, `capture_error`)
+- Data feeder + correlation:
+  - CSV/JSON feeders
+  - Template variables in URL/body/headers (`{{variable}}`)
+  - Capture response fields and reuse in later tasks
+- Rich report export:
+  - JSON/CSV/HTML artifacts
+  - Comparison against previous runs (by ID or latest history entry)
+- Request validation endpoint (single request + response preview)
+- Redirect following (with cap) and request timeout protection
+- Server-side input validation for all API endpoints
+- Local history persistence (`results.json`) with thread-safe writes
 
-- **API Validation**  
-  Use the "Validate Test" feature to perform a single API request and view its response (including status code, headers, and body) in a modal. This helps verify if the test parameters are correct before running a full load test.
+## Requirements
 
-- **Test History**  
-  Automatically saves test results locally in a JSON file. You can view the history, import a test configuration, and delete individual tests (using a unique UUID) or clear the entire history.
+- Go 1.23+
 
-- **CLI Configuration**  
-  Start the server using command-line flags to specify the host and port. For example, run:  
-  ```bash
-  go run main.go --host 127.0.0.1 --port 8000
-  ```
-  
-- **Redirect Handling**  
-  Supports following HTTP redirects automatically.
-
-- **Multi-Method Support**  
-  Works with various HTTP methods (GET, POST, PUT, DELETE, PATCH), including sending request bodies and custom headers.
-
-- **Modern Frontend**  
-  The web interface provides an intuitive and responsive design with consistent styling across forms, modals, and result displays.
-
-## Performance
-![Stressed Banner](https://i.ibb.co/23pCwSpL/result.png)
-
-Stressed can handle **over 200k requests per second** under heavy load.
-
-## Getting Started
-
-### Prerequisites
-
-- Go (version 1.16 or later)
-- Git
-
-### Running the Server
-
-Clone the repository and run the server using:
+## Run
 
 ```bash
 git clone https://github.com/MuriloCarlos1567/stressed.git
@@ -50,20 +47,108 @@ cd stressed
 go run main.go --host 127.0.0.1 --port 8000
 ```
 
-This will start the server at `http://127.0.0.1:8000` and serve the frontend from the `public` directory.
+The app will be available at `http://127.0.0.1:8000`.
 
-### Using the Application
+## CLI Mode (CI-friendly)
 
-1. **Configure a Test:**  
-   Fill in the form with the API endpoint, HTTP method, expected status code, request body, headers, concurrency, and test duration.
+Run one test config and exit with code:
 
-2. **Validate Test:**  
-   Click the "Validate Test" button to perform a single request to the configured API. The response (status code, headers, and body) is displayed in a modal for review.
+- `0`: success
+- `1`: runtime/config/export error
+- `2`: thresholds failed
 
-3. **Run Test:**  
-   Click the "Start Test" button to run the load test. Results are displayed upon completion, including key metrics such as latency, success rate, and throughput.
+```bash
+go run . \
+  --run-config ./config/load-test.json \
+  --report-dir ./reports \
+  --compare-latest \
+  --save-history \
+  --fail-on-thresholds
+```
 
-4. **Save & Manage History:**  
-   Optionally, save the test result. The test history is available for import, deletion (by UUID), or clearing all records.
+## Development
 
----
+```bash
+go test ./...
+go vet ./...
+go build ./...
+```
+
+CI runs the same checks on every push and pull request.
+
+## Main Endpoints
+
+- `POST /api/test` -> run load test
+- `POST /api/validate` -> run one validation request
+- `POST /api/saveTest` -> save test result in history
+- `GET /api/history` -> list saved tests
+- `DELETE /api/history` -> delete one test by `id` or clear all
+- `POST /api/report/export` -> export JSON/CSV/HTML report and optional comparison
+
+## Example: Scenario + Stages + Think Time + Thresholds + Data Feeder/Correlation
+
+```json
+{
+  "method": "GET",
+  "url": "https://api.example.com/health",
+  "expectedStatusCode": 200,
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "concurrency": 50,
+  "testDurationSeconds": 40,
+  "spawnRate": 10,
+  "rampUpSeconds": 5,
+  "rampDownSeconds": 5,
+  "stages": [
+    { "durationSeconds": 10, "targetConcurrency": 10, "spawnRate": 5 },
+    { "durationSeconds": 20, "targetConcurrency": 50, "spawnRate": 10 },
+    { "durationSeconds": 10, "targetConcurrency": 0, "spawnRate": 20 }
+  ],
+  "scenario": {
+    "mode": "sequential",
+    "tasks": [
+      {
+        "name": "login",
+        "method": "POST",
+        "url": "https://api.example.com/login",
+        "requestBody": "{\"email\":\"{{email}}\",\"password\":\"{{password}}\"}",
+        "expectedStatusCode": 200,
+        "capture": {
+          "token": "token",
+          "userId": "user.id"
+        }
+      },
+      {
+        "name": "search",
+        "method": "GET",
+        "url": "https://api.example.com/search?q={{query}}",
+        "expectedStatusCode": 200
+      },
+      {
+        "name": "buy",
+        "method": "POST",
+        "url": "https://api.example.com/orders",
+        "requestBody": "{\"sku\":\"{{sku}}\",\"qty\":1,\"token\":\"{{token}}\",\"userId\":\"{{userId}}\"}",
+        "expectedStatusCode": 201
+      }
+    ]
+  },
+  "thinkTime": {
+    "mode": "distribution",
+    "distribution": "normal",
+    "meanMs": 250,
+    "stdDevMs": 80
+  },
+  "thresholds": {
+    "maxP95LatencyMs": 800,
+    "maxErrorRate": 2,
+    "minRps": 50
+  },
+  "dataFeeder": {
+    "file": "./data/users.json",
+    "format": "json",
+    "loop": true
+  }
+}
+```

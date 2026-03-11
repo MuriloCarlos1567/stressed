@@ -745,6 +745,74 @@
                   <div class="error-message" id="durationError">Please enter a valid duration (1-3600)</div>
                 </div>
               </div>
+
+              <div class="form-group">
+                <div class="form-field">
+                  <label for="spawnRate">
+                    Spawn Rate (users/s)
+                    <div class="tooltip">
+                      <span class="tooltip-icon">?</span>
+                      <span class="tooltip-text">Virtual users started per second. Use 0 for automatic behavior.</span>
+                    </div>
+                  </label>
+                  <input type="number" id="spawnRate" name="spawnRate" value="0" min="0" step="0.1">
+                </div>
+                <div class="form-field">
+                  <label for="rampUp">
+                    Ramp Up (seconds)
+                    <div class="tooltip">
+                      <span class="tooltip-icon">?</span>
+                      <span class="tooltip-text">Time to grow from 0 to the target concurrency when stages are not used.</span>
+                    </div>
+                  </label>
+                  <input type="number" id="rampUp" name="rampUp" value="0" min="0" max="3600">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <div class="form-field">
+                  <label for="rampDown">
+                    Ramp Down (seconds)
+                    <div class="tooltip">
+                      <span class="tooltip-icon">?</span>
+                      <span class="tooltip-text">Time to reduce load at the end when stages are not used.</span>
+                    </div>
+                  </label>
+                  <input type="number" id="rampDown" name="rampDown" value="0" min="0" max="3600">
+                </div>
+                <div class="form-field">
+                  <label for="stagesJson">
+                    Stages (JSON, optional)
+                    <div class="tooltip">
+                      <span class="tooltip-icon">?</span>
+                      <span class="tooltip-text">Overrides fixed duration. Example: [{"durationSeconds":10,"targetConcurrency":50,"spawnRate":5}]</span>
+                    </div>
+                  </label>
+                  <textarea id="stagesJson" name="stagesJson" placeholder='[{"durationSeconds":10,"targetConcurrency":50,"spawnRate":5}]'></textarea>
+                </div>
+              </div>
+
+              <div class="form-field">
+                <label for="scenarioJson">
+                  Scenario (JSON, optional)
+                  <div class="tooltip">
+                    <span class="tooltip-icon">?</span>
+                    <span class="tooltip-text">Sequential flow or weighted tasks. Example: {"mode":"sequential","tasks":[...]}</span>
+                  </div>
+                </label>
+                <textarea id="scenarioJson" name="scenarioJson" placeholder='{"mode":"sequential","tasks":[{"name":"login","method":"POST","url":"https://api.example.com/login","requestBody":"{\"user\":\"u\",\"pass\":\"p\"}","expectedStatusCode":200},{"name":"search","method":"GET","url":"https://api.example.com/search?q=phone","expectedStatusCode":200},{"name":"buy","method":"POST","url":"https://api.example.com/buy","requestBody":"{\"sku\":\"123\"}","expectedStatusCode":201}]}'></textarea>
+              </div>
+
+              <div class="form-field">
+                <label for="thinkTimeJson">
+                  Think Time (JSON, optional)
+                  <div class="tooltip">
+                    <span class="tooltip-icon">?</span>
+                    <span class="tooltip-text">Examples: {"mode":"fixed","fixedMs":200} or {"mode":"distribution","distribution":"normal","meanMs":200,"stdDevMs":50}</span>
+                  </div>
+                </label>
+                <textarea id="thinkTimeJson" name="thinkTimeJson" placeholder='{"mode":"fixed","fixedMs":200}'></textarea>
+              </div>
             </div>
 
             <div class="button-group">
@@ -903,6 +971,12 @@
     const toast = document.getElementById('toast');
     const statusDot = document.getElementById('statusDot');
     const statusText = document.getElementById('statusText');
+    const spawnRateInput = document.getElementById('spawnRate');
+    const rampUpInput = document.getElementById('rampUp');
+    const rampDownInput = document.getElementById('rampDown');
+    const stagesJsonInput = document.getElementById('stagesJson');
+    const scenarioJsonInput = document.getElementById('scenarioJson');
+    const thinkTimeJsonInput = document.getElementById('thinkTimeJson');
 
     const modalOverlay = document.getElementById('modalOverlay');
     const modalClose = document.getElementById('modalClose');
@@ -996,70 +1070,20 @@
       if (testRunning) {
         return;
       }
-      urlError.style.display = 'none';
-      requestBodyError.style.display = 'none';
-      expectedStatusError.style.display = 'none';
-      concurrencyError.style.display = 'none';
-      durationError.style.display = 'none';
-      const method = methodSelect.value;
-      const url = document.getElementById('url').value;
-      const requestBody = requestBodyTextarea.value;
-      const expectedStatus = document.getElementById('expectedStatus').value;
-      const concurrency = document.getElementById('concurrency').value;
-      const duration = document.getElementById('duration').value;
-      if (!isValidUrl(url)) {
-        urlError.style.display = 'block';
+      const config = collectConfigFromForm();
+      if (!config) {
         return;
       }
-      if (['POST', 'PUT', 'PATCH'].includes(method) && requestBody) {
-        try {
-          JSON.parse(requestBody);
-        } catch (error) {
-          requestBodyError.style.display = 'block';
-          return;
-        }
-      }
-      if (!isValidStatusCode(expectedStatus)) {
-        expectedStatusError.style.display = 'block';
-        return;
-      }
-      if (!isValidConcurrency(concurrency)) {
-        concurrencyError.style.display = 'block';
-        return;
-      }
-      if (!isValidDuration(duration)) {
-        durationError.style.display = 'block';
-        return;
-      }
-      currentTestConfig = {
-        method,
-        url,
-        requestBody: requestBody || 'None',
-        expectedStatus,
-        headers: {...headers},
-        concurrency,
-        duration
-      };
+      currentTestConfig = config;
       startTest(currentTestConfig);
     });
 
     validateButton.addEventListener('click', () => {
-      const method = methodSelect.value;
-      const url = document.getElementById('url').value;
-      const requestBody = requestBodyTextarea.value;
-      const expectedStatus = document.getElementById('expectedStatus').value;
-      const concurrency = document.getElementById('concurrency').value;
-      const duration = document.getElementById('duration').value;
-      
-      currentTestConfig = {
-        method,
-        url,
-        requestBody: requestBody || 'None',
-        expectedStatus,
-        headers: { ...headers },
-        concurrency,
-        duration
-      };
+      const config = collectConfigFromForm();
+      if (!config) {
+        return;
+      }
+      currentTestConfig = config;
 
       modalResponse.textContent = 'Loading...';
       modalOverlay.classList.remove('hidden');
@@ -1068,7 +1092,9 @@
         method: currentTestConfig.method,
         url: currentTestConfig.url,
         requestBody: currentTestConfig.requestBody === 'None' ? '' : currentTestConfig.requestBody,
-        headers: currentTestConfig.headers
+        headers: currentTestConfig.headers,
+        scenario: currentTestConfig.scenario || null,
+        thinkTime: currentTestConfig.thinkTime || null
       };
 
       fetch('/api/validate', {
@@ -1116,7 +1142,13 @@
           expectedStatusCode: parseInt(currentTestConfig.expectedStatus, 10),
           headers: { ...currentTestConfig.headers },
           concurrency: parseInt(currentTestConfig.concurrency, 10),
-          testDurationSeconds: parseInt(currentTestConfig.duration, 10)
+          testDurationSeconds: parseInt(currentTestConfig.duration, 10),
+          spawnRate: Number(currentTestConfig.spawnRate) || 0,
+          rampUpSeconds: parseInt(currentTestConfig.rampUpSeconds, 10) || 0,
+          rampDownSeconds: parseInt(currentTestConfig.rampDownSeconds, 10) || 0,
+          stages: currentTestConfig.stages || [],
+          scenario: currentTestConfig.scenario || null,
+          thinkTime: currentTestConfig.thinkTime || null
         },
         result: currentTestResults
       };
@@ -1172,7 +1204,13 @@
           requestBody: config.requestBody === 'None' ? '' : config.requestBody,
           headers: config.headers,
           concurrency: parseInt(config.concurrency, 10),
-          testDurationSeconds: parseInt(config.duration, 10)
+          testDurationSeconds: parseInt(config.duration, 10),
+          spawnRate: Number(config.spawnRate) || 0,
+          rampUpSeconds: parseInt(config.rampUpSeconds, 10) || 0,
+          rampDownSeconds: parseInt(config.rampDownSeconds, 10) || 0,
+          stages: config.stages || [],
+          scenario: config.scenario || null,
+          thinkTime: config.thinkTime || null
         })
       })
       .then(response => {
@@ -1231,9 +1269,15 @@
       const config = testData.config;
       methodSelect.value = config.method;
       document.getElementById('url').value = config.url;
-      document.getElementById('expectedStatus').value = config.expectedStatus;
+      document.getElementById('expectedStatus').value = config.expectedStatus || config.expectedStatusCode || 200;
       document.getElementById('concurrency').value = config.concurrency;
-      document.getElementById('duration').value = config.duration;
+      document.getElementById('duration').value = config.duration || config.testDurationSeconds || 10;
+      spawnRateInput.value = config.spawnRate ?? 0;
+      rampUpInput.value = config.rampUpSeconds ?? 0;
+      rampDownInput.value = config.rampDownSeconds ?? 0;
+      stagesJsonInput.value = config.stages ? JSON.stringify(config.stages, null, 2) : '';
+      scenarioJsonInput.value = config.scenario ? JSON.stringify(config.scenario, null, 2) : '';
+      thinkTimeJsonInput.value = config.thinkTime ? JSON.stringify(config.thinkTime, null, 2) : '';
       if (config.requestBody && config.requestBody !== 'None') {
         requestBodyTextarea.value = config.requestBody;
       }
@@ -1246,6 +1290,141 @@
       updateHeadersList();
       const event = new Event('change');
       methodSelect.dispatchEvent(event);
+    }
+
+    function collectConfigFromForm() {
+      urlError.style.display = 'none';
+      requestBodyError.style.display = 'none';
+      expectedStatusError.style.display = 'none';
+      concurrencyError.style.display = 'none';
+      durationError.style.display = 'none';
+
+      const method = methodSelect.value;
+      const url = document.getElementById('url').value;
+      const requestBody = requestBodyTextarea.value;
+      const expectedStatus = document.getElementById('expectedStatus').value;
+      const concurrency = document.getElementById('concurrency').value;
+      const duration = document.getElementById('duration').value;
+      const spawnRate = spawnRateInput.value || '0';
+      const rampUpSeconds = rampUpInput.value || '0';
+      const rampDownSeconds = rampDownInput.value || '0';
+
+      if (!isValidUrl(url)) {
+        urlError.style.display = 'block';
+        return null;
+      }
+      if (['POST', 'PUT', 'PATCH'].includes(method) && requestBody) {
+        try {
+          JSON.parse(requestBody);
+        } catch (error) {
+          requestBodyError.style.display = 'block';
+          return null;
+        }
+      }
+      if (!isValidStatusCode(expectedStatus)) {
+        expectedStatusError.style.display = 'block';
+        return null;
+      }
+      if (!isValidConcurrency(concurrency)) {
+        concurrencyError.style.display = 'block';
+        return null;
+      }
+      if (!isValidDuration(duration)) {
+        durationError.style.display = 'block';
+        return null;
+      }
+
+      const parsedSpawnRate = Number(spawnRate);
+      if (Number.isNaN(parsedSpawnRate) || parsedSpawnRate < 0) {
+        showToast('Spawn rate must be a number >= 0', 'error');
+        return null;
+      }
+
+      const parsedRampUp = parseInt(rampUpSeconds, 10);
+      const parsedRampDown = parseInt(rampDownSeconds, 10);
+      if (Number.isNaN(parsedRampUp) || parsedRampUp < 0 || Number.isNaN(parsedRampDown) || parsedRampDown < 0) {
+        showToast('Ramp values must be integers >= 0', 'error');
+        return null;
+      }
+
+      const stages = parseOptionalJSON(stagesJsonInput.value, 'Stages');
+      if (stages.error) {
+        showToast(stages.error, 'error');
+        return null;
+      }
+      if (stages.value && !Array.isArray(stages.value)) {
+        showToast('Stages JSON must be an array', 'error');
+        return null;
+      }
+      let effectiveDuration = parseInt(duration, 10);
+      if (stages.value && stages.value.length > 0) {
+        let totalStageDuration = 0;
+        for (const stage of stages.value) {
+          if (!stage || typeof stage !== 'object') {
+            showToast('Each stage must be an object', 'error');
+            return null;
+          }
+          const stageDuration = Number(stage.durationSeconds);
+          if (!Number.isInteger(stageDuration) || stageDuration <= 0) {
+            showToast('Each stage must include durationSeconds > 0', 'error');
+            return null;
+          }
+          totalStageDuration += stageDuration;
+        }
+        effectiveDuration = totalStageDuration;
+      }
+
+      const scenario = parseOptionalJSON(scenarioJsonInput.value, 'Scenario');
+      if (scenario.error) {
+        showToast(scenario.error, 'error');
+        return null;
+      }
+      if (scenario.value && (typeof scenario.value !== 'object' || Array.isArray(scenario.value))) {
+        showToast('Scenario JSON must be an object', 'error');
+        return null;
+      }
+      if (scenario.value && !Array.isArray(scenario.value.tasks)) {
+        showToast('Scenario JSON must include tasks array', 'error');
+        return null;
+      }
+
+      const thinkTime = parseOptionalJSON(thinkTimeJsonInput.value, 'Think Time');
+      if (thinkTime.error) {
+        showToast(thinkTime.error, 'error');
+        return null;
+      }
+      if (thinkTime.value && (typeof thinkTime.value !== 'object' || Array.isArray(thinkTime.value))) {
+        showToast('Think Time JSON must be an object', 'error');
+        return null;
+      }
+
+      return {
+        method,
+        url,
+        requestBody: requestBody || 'None',
+        expectedStatus,
+        headers: { ...headers },
+        concurrency,
+        duration: String(effectiveDuration),
+        spawnRate: parsedSpawnRate,
+        rampUpSeconds: parsedRampUp,
+        rampDownSeconds: parsedRampDown,
+        stages: stages.value || [],
+        scenario: scenario.value || null,
+        thinkTime: thinkTime.value || null
+      };
+    }
+
+    function parseOptionalJSON(raw, label) {
+      const trimmed = raw.trim();
+      if (!trimmed) {
+        return { value: null };
+      }
+      try {
+        return { value: JSON.parse(trimmed) };
+      } catch (error) {
+        return { error: `${label} JSON is invalid` };
+      }
     }
 
     function isValidUrl(urlString) {
