@@ -592,7 +592,13 @@
         headers: config.headers,
         expectedStatus: config.expectedStatusCode || config.expectedStatus,
         duration: config.testDurationSeconds || config.duration,
-        concurrency: config.concurrency
+        concurrency: config.concurrency,
+        spawnRate: config.spawnRate ?? 0,
+        rampUpSeconds: config.rampUpSeconds ?? 0,
+        rampDownSeconds: config.rampDownSeconds ?? 0,
+        stages: config.stages || [],
+        scenario: config.scenario || null,
+        thinkTime: config.thinkTime || null
       };
 
       localStorage.setItem('importedTest', JSON.stringify({ config: importedConfig }));
